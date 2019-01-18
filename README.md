@@ -1,7 +1,7 @@
 # Syntony #
 
 ## clade.py ##
-Usage clade.py --debug --caller_list --clades CLADES_FILE --clusters GENE_CLUSTER_FILE
+Usage clade.py [--debug] [--caller_list] --clades CLADES_FILE --clusters GENE_CLUSTER_FILE
 
 
 ## CLADES_FILE ##

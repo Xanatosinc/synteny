@@ -12,11 +12,12 @@ use Number::Format qw(format_number);
 use lib::GeneCluster;
 
 sub main {
-    my $usage = "Usage $0 --debug --caller_list --clades CLADES_FILE --clusters GENE_CLUSTER_FILE\n";
-    my ( $debug_opt, $caller_list_opt, $cladeFilename, $clusterFilename );
+    my $usage = "Usage $0 [--debug] [--caller_list] [--caller_delta] --clades CLADES_FILE --clusters GENE_CLUSTER_FILE\n";
+    my ( $debug_opt, $caller_list_opt, $caller_delta_opt, $cladeFilename, $clusterFilename );
     GetOptions(
         'debug' => \$debug_opt,
         'caller_list' => \$caller_list_opt,
+        'caller_delta' => \$caller_delta_opt,
         'clades=s' => \$cladeFilename,
         'clusters=s' => \$clusterFilename,
     ) or die $usage;
@@ -25,7 +26,8 @@ sub main {
         my %clusters = scanClusters(\%clades, $clusterFilename, $debug_opt);
 
         print " ### FILTERING ###\n" if $debug_opt;
-        printf "| %-8s | %-8s | %-8s | %-8s | %-8s | %-8s |\n", "CLADE", "GC_COUNT", "COUNT", "MIN", "MAX", "AVG" if $debug_opt;
+        printf " /--------------------| %-8s | %-8s | %-8s | %-8s |\n", "GENOME", "DELTA", "CALLER1", "CALLER2" if $caller_delta_opt;
+        printf "| %-8s | %-8s | %-8s | %-8s | %-8s | %-8s |\n", "CLADE", "GC_COUNT", "COUNT", "MIN", "MAX", "AVG" if ($debug_opt || $caller_delta_opt);
         printf "%s\t%s\t%s\t%s\n", "Clade", "Genome_Name", "Caller_Id", "Cluster_Id" if $caller_list_opt;
         foreach my $cladeId (sort keys %clades) {
             #print "[$cladeId]\n" if $debug_opt;
@@ -37,8 +39,9 @@ sub main {
                    $filteredClusters{$clusterCheckId} = $clusters{$clusterCheckId};
                 }
             }
-            my $filterCount = scalar keys %filteredClusters;
+            my $cluster_per_clade_count = scalar keys %filteredClusters;
 
+            # Arrange data such that %genomeCallers{genome_id}{caller_id} = cluster_id
             my %genomeCallers;
             foreach my $genome (keys $clades{$cladeId}) {
                 foreach my $clusterId (sort keys %filteredClusters) {
@@ -48,32 +51,59 @@ sub main {
                     }
                 }
             }
-            my $count = scalar keys %genomeCallers;
-            my $min = 9999;
-            my $max = 0;
-            my $sum = 0;
+            my $calls_per_clade_count = scalar keys %genomeCallers;
+            my $min_calls_per_genome_count = 9999;
+            my $max_calls_per_genome_count = 0;
+            my $sum_calls_per_clade = 0;
             foreach my $genome (sort keys %genomeCallers) {
-                my $callerCount = int( scalar keys $genomeCallers{$genome} );
-                $max = max(
-                    $callerCount,
-                    $max
+                my $caller_count = int( scalar keys $genomeCallers{$genome} );
+                $max_calls_per_genome_count = max(
+                    $caller_count,
+                    $max_calls_per_genome_count
                 );
-                $min = min($callerCount, $min);
-                $sum += $callerCount;
+                $min_calls_per_genome_count = min($caller_count, $min_calls_per_genome_count);
+                $sum_calls_per_clade += $caller_count;
 
-                #printf "%s callerIds\n", $callerCount if $debug_opt;
+                my ($max_caller_delta, $prev_caller, $next_caller, $max_prev_caller, $max_next_caller) = (0, 0, 0, 0, 0);
+
                 foreach my $callerId (sort keys $genomeCallers{$genome}) {
-                    #printf "%-8s : %s\n", $callerId, $genomeCallers{$genome}{$callerId} if $debug_opt;
+                    $prev_caller = $next_caller;
+                    $next_caller = $callerId;
+                    if ($prev_caller) {
+                        if ($next_caller - $prev_caller > $max_caller_delta) {
+                            $max_caller_delta = $next_caller - $prev_caller;
+                            $max_prev_caller = $prev_caller;
+                            $max_next_caller = $next_caller;
+                        }
+                    }
+
                     my $clusterId = $genomeCallers{$genome}{$callerId};
                     printf "%s\t%s\t%s\t%s\n", $cladeId, $genome, $callerId, $clusterId if $caller_list_opt;
                 }
+                outputDeltaInfo($genome, $max_caller_delta, $max_prev_caller, $max_next_caller) if $caller_delta_opt;
+
             }
-            my $avg = $sum / $count;
-            printf "| %-8s | %8.0f | %8.0f | %8.0f | %8.0f | %8.2f |\n", $cladeId, $filterCount, $count, $min, $max, $avg if $debug_opt;
+            my $avg = $sum_calls_per_clade / $calls_per_clade_count;
+            printf "| %-8s | %8.0f | %8.0f | %8.0f | %8.0f | %8.2f |\n\n", (
+                $cladeId,
+                $cluster_per_clade_count,
+                $calls_per_clade_count,
+                $min_calls_per_genome_count,
+                $max_calls_per_genome_count,
+                $avg,
+            ) if $debug_opt || $caller_delta_opt;
         }
     } else {
         print $usage;
     }
+}
+
+sub outputDeltaInfo {
+    my ( $genome, $max_caller_delta, $max_prev_caller, $max_next_caller ) = @_;
+
+    printf " /--------------------| %-8s | %-8s | %-8s | %-8s |\n", (
+        $genome, $max_caller_delta, $max_prev_caller, $max_next_caller
+    );
 }
 
 sub scanClades {

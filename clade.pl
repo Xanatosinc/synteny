@@ -26,7 +26,7 @@ sub main {
 
         print " ### FILTERING ###\n" if $debug_opt;
         printf "| %-8s | %-8s | %-8s | %-8s | %-8s | %-8s |\n", "CLADE", "GC_COUNT", "COUNT", "MIN", "MAX", "AVG" if $debug_opt;
-        printf "%s\t%s\t%s\n", "Clade", "Genome_Name", "Caller_Id" if $caller_list_opt;
+        printf "%s\t%s\t%s\t%s\n", "Clade", "Genome_Name", "Caller_Id", "Cluster_Id" if $caller_list_opt;
         foreach my $cladeId (sort keys %clades) {
             #print "[$cladeId]\n" if $debug_opt;
             my %filteredClusters;
@@ -64,7 +64,8 @@ sub main {
                 #printf "%s callerIds\n", $callerCount if $debug_opt;
                 foreach my $callerId (sort keys $genomeCallers{$genome}) {
                     #printf "%-8s : %s\n", $callerId, $genomeCallers{$genome}{$callerId} if $debug_opt;
-                    printf "%s\t%s\t%s\n", $cladeId, $genome, $callerId if $caller_list_opt;
+                    my $clusterId = $genomeCallers{$genome}{$callerId};
+                    printf "%s\t%s\t%s\t%s\n", $cladeId, $genome, $callerId, $clusterId if $caller_list_opt;
                 }
             }
             my $avg = $sum / $count;
